@@ -12,10 +12,10 @@
 \brief Given a key, returns some html.
 *//********************************************************************/
 
-#include "Audacity.h" // for USE_* macros
+
 #include "HelpText.h"
 
-#include "Experimental.h"
+
 
 #include <wx/string.h>
 #include <wx/intl.h>
@@ -387,12 +387,13 @@ const wxString VerCheckArgs(){
 }
 
 // Text of hyperlink to check versions.
-const wxString VerCheckHtml(){
+const wxString VerCheckHtml()
+{
    wxStringOutputStream o;
    wxTextOutputStream s(o);
    s
       << "<center>[["
-      << VerCheckUrl()
+      << VerCheckUrl().GET()
       << "|"
       << XO("Check Online")
       << "]]</center>\n";
@@ -400,7 +401,8 @@ const wxString VerCheckHtml(){
 }
 
 // Url with Version check args attached.
-const wxString VerCheckUrl(){
+const URLString VerCheckUrl()
+{
    //The version we intend to use for live Audacity.
 #define VER_CHECK_URL "https://www.audacityteam.org/download/?"
 //For testing of our scriptlet.

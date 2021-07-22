@@ -16,7 +16,7 @@
 #include <wx/event.h> // inherit wxEvtHandler
 #include <wx/weakref.h> // member variable
 #include "SelectedRegion.h"
-#include "MemoryX.h"
+#include <memory>
 #include "ZoomInfo.h" // to inherit
 
 
@@ -38,7 +38,7 @@ wxDECLARE_EXPORTED_EVENT( AUDACITY_DLL_API,
 
 // This heavyweight wrapper of the SelectedRegion structure emits events
 // on mutating operations, that other classes can listen for.
-class NotifyingSelectedRegion : public wxEvtHandler
+class AUDACITY_DLL_API NotifyingSelectedRegion : public wxEvtHandler
 {
 public:
    // Expose SelectedRegion's const accessors
@@ -101,6 +101,7 @@ private:
 // See big pictorial comment in TrackPanel.cpp for explanation of these numbers
 enum : int {
    // constants related to y coordinates in the track panel
+   kAffordancesAreaHeight = 20,
    kTopInset = 4,
    kTopMargin = kTopInset + kBorderThickness,
    kBottomMargin = kShadowThickness + kBorderThickness,
@@ -224,15 +225,8 @@ public:
    bool bScrollBeyondZero;
    bool bAdjustSelectionEdges;
 
-   // During timer update, grab the volatile stream time just once, so that
-   // various other drawing code can use the exact same value.
-   double mRecentStreamTime;
-
    void WriteXMLAttributes(XMLWriter &xmlFile) const;
    bool ReadXMLAttribute(const wxChar *attr, const wxChar *value);
-
-   // Receive track panel timer notifications
-   void OnTimer(wxCommandEvent &event);
 
 private:
    int mHeight{ 0 };

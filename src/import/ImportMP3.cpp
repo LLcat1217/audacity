@@ -26,11 +26,12 @@
 
 *//*******************************************************************/
 
-#include "../Audacity.h" // for USE_* macros
+
 
 #include <wx/defs.h>
 
 #include "Import.h"
+#include "BasicUI.h"
 #include "ImportPlugin.h"
 #include "../Project.h"
 
@@ -1097,8 +1098,11 @@ enum mad_flow MP3ImportFileHandle::ErrorCB(struct mad_stream *stream,
    }
 
    // Let the user know about the error
-   AudacityMessageBox(XO("Import failed\n\nThis is likely caused by a malformed MP3.\n\n"));
-
+   using namespace BasicUI;
+   ShowErrorDialog( {},
+      DefaultCaption(),
+      XO("Import failed\n\nThis is likely caused by a malformed MP3.\n\n"),
+      "Opening_malformed_MP3_files");
    return MAD_FLOW_BREAK;
 }
 

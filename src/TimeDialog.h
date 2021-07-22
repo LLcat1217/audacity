@@ -13,14 +13,14 @@
 
 #include <wx/defs.h>
 
-#include "audacity/ComponentInterface.h" // member variable
+#include "ComponentInterface.h" // member variable
 
 #include "widgets/wxPanelWrapper.h" // to inherit
 
 class NumericTextCtrl;
 class ShuttleGui;
 
-class TimeDialog final : public wxDialogWrapper
+class AUDACITY_DLL_API TimeDialog final : public wxDialogWrapper
 {
  public:
 

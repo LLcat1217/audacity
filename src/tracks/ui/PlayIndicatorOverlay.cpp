@@ -8,7 +8,7 @@ Paul Licameli split from TrackPanel.cpp
 
 **********************************************************************/
 
-#include "../../Audacity.h"
+
 #include "PlayIndicatorOverlay.h"
 
 #include "../../AColor.h"
@@ -100,24 +100,7 @@ void PlayIndicatorOverlayBase::Draw(OverlayPanel &panel, wxDC &dc)
    if(auto tp = dynamic_cast<TrackPanel*>(&panel)) {
       wxASSERT(mIsMaster);
 
-      // Draw indicator in all visible tracks
-      tp->VisitCells( [&]( const wxRect &rect, TrackPanelCell &cell ) {
-         const auto pTrackView = dynamic_cast<TrackView*>(&cell);
-         if (pTrackView) pTrackView->FindTrack()->TypeSwitch(
-            [](LabelTrack *) {
-               // Don't draw the indicator in label tracks
-            },
-            [&](Track *) {
-               // Draw the NEW indicator in its NEW location
-               // AColor::Line includes both endpoints so use GetBottom()
-               AColor::Line(dc,
-                            mLastIndicatorX,
-                            rect.GetTop(),
-                            mLastIndicatorX,
-                            rect.GetBottom());
-            }
-         );
-      } );
+      AColor::Line(dc, mLastIndicatorX, tp->GetRect().GetTop(), mLastIndicatorX, tp->GetRect().GetBottom());
    }
    else if(auto ruler = dynamic_cast<AdornedRulerPanel*>(&panel)) {
       wxASSERT(!mIsMaster);
@@ -174,13 +157,13 @@ void PlayIndicatorOverlay::OnTimer(wxCommandEvent &event)
       }
    }
    else {
-      // Calculate the horizontal position of the indicator
-      const double playPos = viewInfo.mRecentStreamTime;
-
       auto &window = ProjectWindow::Get( *mProject );
+      auto &scroller = window.GetPlaybackScroller();
+      // Calculate the horizontal position of the indicator
+      const double playPos = scroller.GetRecentStreamTime();
+
       using Mode = ProjectWindow::PlaybackScroller::Mode;
-      const Mode mode =
-         window.GetPlaybackScroller().GetMode();
+      const Mode mode = scroller.GetMode();
       const bool pinned = ( mode == Mode::Pinned || mode == Mode::Right );
 
       // Use a small tolerance to avoid flicker of play head pinned all the way

@@ -14,9 +14,10 @@
 #ifndef __AUDACITY_EFFECTUI_H__
 #define __AUDACITY_EFFECTUI_H__
 
-#include "../Experimental.h"
-
 #include <wx/bitmap.h> // member variables
+
+#include "Identifier.h"
+#include "PluginInterface.h"
 
 #if defined(EXPERIMENTAL_EFFECTS_RACK)
 
@@ -104,8 +105,8 @@ private:
 
 #endif
 
-#include "audacity/EffectInterface.h"
-#include "../widgets/wxPanelWrapper.h" // to inherit
+#include "EffectInterface.h"
+#include "widgets/wxPanelWrapper.h" // to inherit
 
 #include "../SelectedRegion.h"
 
@@ -222,6 +223,7 @@ class CommandContext;
 
 namespace  EffectUI {
 
+   AUDACITY_DLL_API
    wxDialog *DialogFactory( wxWindow &parent, EffectHostInterface *pHost,
       EffectUIClientInterface *client);
 
@@ -229,7 +231,7 @@ namespace  EffectUI {
    // Returns true on success.  Will only operate on tracks that
    // have the "selected" flag set to true, which is consistent with
    // Audacity's standard UI.
-   bool DoEffect(
+   AUDACITY_DLL_API bool DoEffect(
       const PluginID & ID, const CommandContext &context, unsigned flags );
 
 }

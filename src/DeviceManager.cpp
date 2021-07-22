@@ -6,13 +6,13 @@
 
 ******************************************************************/
 
-#include "Audacity.h" // for USE_* macros
+
 #include "DeviceManager.h"
 
 // For compilers that support precompilation, includes "wx/wx.h".
 #include <wx/wxprec.h>
 
-#include "Experimental.h"
+
 
 #include "portaudio.h"
 #ifdef __WXMSW__
@@ -24,9 +24,11 @@
 #endif
 
 #ifndef WX_PRECOMP
+#include <wx/app.h>
 #include <wx/choice.h>
 #include <wx/event.h>
 #include <wx/intl.h>
+#include <wx/log.h>
 #include <wx/settings.h>
 #include <wx/sizer.h>
 #include <wx/statbmp.h>

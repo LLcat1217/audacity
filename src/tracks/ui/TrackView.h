@@ -19,7 +19,7 @@ class TrackList;
 class TrackVRulerControls;
 class TrackPanelResizerCell;
 
-class TrackView /* not final */ : public CommonTrackCell
+class AUDACITY_DLL_API TrackView /* not final */ : public CommonTrackCell
    , public std::enable_shared_from_this<TrackView>
 {
    TrackView( const TrackView& ) = delete;
@@ -62,6 +62,9 @@ public:
    std::shared_ptr<TrackVRulerControls> GetVRulerControls();
    std::shared_ptr<const TrackVRulerControls> GetVRulerControls() const;
 
+   // by default returns nullptr, meaning that track has no drag controls area
+   std::shared_ptr<CommonTrackCell> GetAffordanceControls();
+
 
    void WriteXMLAttributes( XMLWriter & ) const override;
    bool HandleXMLAttribute( const wxChar *attr, const wxChar *value ) override;
@@ -88,8 +91,11 @@ protected:
    // Private factory to make appropriate object; class TrackView handles
    // memory management thereafter
    virtual std::shared_ptr<TrackVRulerControls> DoGetVRulerControls() = 0;
+   // May return nullptr (which is default) if track does not need affordance area
+   virtual std::shared_ptr<CommonTrackCell> DoGetAffordanceControls();
 
    std::shared_ptr<TrackVRulerControls> mpVRulerControls;
+   std::shared_ptr<CommonTrackCell> mpAffordanceCellControl;
 
 private:
    bool           mMinimized{ false };

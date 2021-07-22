@@ -10,9 +10,10 @@ Paul Licameli split from AudacityProject.cpp
 
 #include "ProjectWindow.h"
 
-#include "Experimental.h"
+
 
 #include "AllThemeResources.h"
+#include "AudioIO.h"
 #include "Menus.h"
 #include "Project.h"
 #include "ProjectAudioIO.h"
@@ -32,6 +33,7 @@ Paul Licameli split from AudacityProject.cpp
 #include "widgets/wxPanelWrapper.h"
 #include "widgets/WindowAccessible.h"
 
+#include <wx/app.h>
 #include <wx/display.h>
 #include <wx/scrolbar.h>
 #include <wx/sizer.h>
@@ -565,6 +567,13 @@ enum {
 
    NextID,
 };
+
+//If you want any of these files, ask JKC.  They are not
+//yet checked in to Audacity SVN as of 12-Feb-2010
+#ifdef EXPERIMENTAL_NOTEBOOK
+   #include "GuiFactory.h"
+   #include "APanel.h"
+#endif
 
 ProjectWindow::ProjectWindow(wxWindow * parent, wxWindowID id,
                                  const wxPoint & pos,
@@ -1653,7 +1662,7 @@ void ProjectWindow::TP_HandleResize()
 ProjectWindow::PlaybackScroller::PlaybackScroller(AudacityProject *project)
 : mProject(project)
 {
-   ViewInfo::Get( *mProject ).Bind(EVT_TRACK_PANEL_TIMER,
+   mProject->Bind(EVT_TRACK_PANEL_TIMER,
       &PlaybackScroller::OnTimer,
       this);
 }
@@ -1663,9 +1672,12 @@ void ProjectWindow::PlaybackScroller::OnTimer(wxCommandEvent &event)
    // Let other listeners get the notification
    event.Skip();
 
+   auto gAudioIO = AudioIO::Get();
+   mRecentStreamTime = gAudioIO->GetStreamTime();
+
    auto cleanup = finally([&]{
       // Propagate the message to other listeners bound to this
-      this->ProcessEvent( event );
+      this->SafelyProcessEvent( event );
    });
 
    if(!ProjectAudioIO::Get( *mProject ).IsAudioActive())
@@ -1685,7 +1697,7 @@ void ProjectWindow::PlaybackScroller::OnTimer(wxCommandEvent &event)
 
       auto &viewInfo = ViewInfo::Get( *mProject );
       auto &trackPanel = GetProjectPanel( *mProject );
-      const int posX = viewInfo.TimeToPosition(viewInfo.mRecentStreamTime);
+      const int posX = viewInfo.TimeToPosition(mRecentStreamTime);
       auto width = viewInfo.GetTracksUsableWidth();
       int deltaX;
       switch (mMode)
@@ -1714,7 +1726,7 @@ void ProjectWindow::ZoomInByFactor( double ZoomFactor )
    auto &project = mProject;
    auto &viewInfo = ViewInfo::Get( project );
 
-   auto gAudioIO = AudioIOBase::Get();
+   auto gAudioIO = AudioIO::Get();
    // LLL: Handling positioning differently when audio is
    // actively playing.  Don't do this if paused.
    if (gAudioIO->IsStreamActive(

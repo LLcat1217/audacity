@@ -50,7 +50,7 @@
 *//*******************************************************************/
 
 
-#include "Audacity.h"
+
 #include "Prefs.h"
 
 #include <wx/defs.h>
@@ -61,6 +61,10 @@
 
 #include "Internat.h"
 #include "MemoryX.h"
+#include <memory>
+
+BoolSetting DefaultUpdatesCheckingFlag{
+    L"/Update/DefaultUpdatesChecking", true };
 
 std::unique_ptr<FileConfig> ugPrefs {};
 
@@ -178,6 +182,25 @@ void InitPreferences( std::unique_ptr<FileConfig> uPrefs )
    wxConfigBase::Set(gPrefs);
 }
 
+void ResetPreferences()
+{
+   // Future:  make this a static registry table, so the settings objects
+   // don't need to be defined in this source code file to avoid dependency
+   // cycles
+   std::pair<BoolSetting &, bool> stickyBoolSettings[] {
+      {DefaultUpdatesCheckingFlag, 0},
+      // ... others?
+   };
+   for (auto &pair : stickyBoolSettings)
+      pair.second = pair.first.Read();
+
+   bool savedValue = DefaultUpdatesCheckingFlag.Read();
+   gPrefs->DeleteAll();
+
+   for (auto &pair : stickyBoolSettings)
+      pair.first.Write(pair.second);
+}
+
 void FinishPreferences()
 {
    if (gPrefs) {
@@ -280,7 +303,7 @@ bool ChoiceSetting::Write( const wxString &value )
 }
 
 EnumSettingBase::EnumSettingBase(
-   const wxString &key,
+   const SettingBase &key,
    EnumValueSymbols symbols,
    long defaultSymbol,
 
@@ -397,4 +420,24 @@ void PreferenceInitializer::ReinitializeAll()
 {
    for ( auto pInitializer : allInitializers() )
       (*pInitializer)();
+}
+
+wxConfigBase *SettingBase::GetConfig() const
+{
+   return gPrefs;
+}
+
+bool SettingBase::Delete()
+{
+   auto config = GetConfig();
+   return config && config->DeleteEntry( GetPath() );
+}
+
+bool BoolSetting::Toggle()
+{
+   bool value = Read();
+   if ( Write( !value ) )
+      return !value;
+   else
+      return value;
 }

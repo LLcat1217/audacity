@@ -10,8 +10,6 @@ Paul Licameli split from AudacityProject.cpp
 
 #include "ProjectFileManager.h"
 
-#include "Experimental.h"
-
 #include <wx/crt.h> // for wxPrintf
 
 #if defined(__WXGTK__)
@@ -19,6 +17,9 @@ Paul Licameli split from AudacityProject.cpp
 #endif
 
 #include <wx/frame.h>
+#include <wx/log.h>
+#include "BasicUI.h"
+#include "CodeConversions.h"
 #include "Legacy.h"
 #include "PlatformCompatibility.h"
 #include "Project.h"
@@ -43,10 +44,12 @@ Paul Licameli split from AudacityProject.cpp
 #include "import/ImportMIDI.h"
 #include "toolbars/SelectionBar.h"
 #include "widgets/AudacityMessageBox.h"
-#include "widgets/ErrorDialog.h"
 #include "widgets/FileHistory.h"
+#include "widgets/UnwritableLocationErrorDialog.h"
 #include "widgets/Warning.h"
 #include "xml/XMLFileReader.h"
+
+#include "HelpText.h"
 
 static const AudacityProject::AttachedObjects::RegisteredFactory sFileManagerKey{
    []( AudacityProject &parent ){
@@ -300,8 +303,7 @@ bool ProjectFileManager::DoSave(const FilePath & fileName, const bool fromSaveAs
       {
          if (freeSpace.GetValue() <= fileSize.GetValue())
          {
-            ShowErrorDialog(
-               &window,
+            BasicUI::ShowErrorDialog( *ProjectFramePlacement( &proj ),
                XO("Insufficient Disk Space"),
                XO("The project size exceeds the available free space on the target disk.\n\n"
                   "Please select a different disk with more free space."),
@@ -327,8 +329,7 @@ bool ProjectFileManager::DoSave(const FilePath & fileName, const bool fromSaveAs
    {
       if (wxFileName::GetSize(projectFileIO.GetFileName()) > UINT32_MAX)
       {
-         ShowErrorDialog(
-            &window,
+         BasicUI::ShowErrorDialog( *ProjectFramePlacement( &proj ),
             XO("Error Saving Project"),
             XO("The project exceeds the maximum size of 4GB when writing to a FAT32 formatted filesystem."),
             "Error:_Unsuitable_drive"
@@ -342,13 +343,14 @@ bool ProjectFileManager::DoSave(const FilePath & fileName, const bool fromSaveAs
    {
       // Show this error only if we didn't fail reconnection in SaveProject
       // REVIEW: Could HasConnection() be true but SaveProject() still have failed?
-      if (!projectFileIO.HasConnection())
-         ShowErrorDialog(
-            &window,
+      if (!projectFileIO.HasConnection()) {
+         using namespace BasicUI;
+         ShowErrorDialog( *ProjectFramePlacement( &proj ),
             XO("Error Saving Project"),
             FileException::WriteFailureMessage(fileName),
-            "Error:_Disk_full_or_not_writable"
-            );
+            "Error:_Disk_full_or_not_writable",
+            ErrorDialogOptions{ ErrorDialogType::ModalErrorReport } );
+      }
       return false;
    }
 
@@ -642,8 +644,7 @@ bool ProjectFileManager::SaveCopy(const FilePath &fileName /* = wxT("") */)
       {
          if (freeSpace.GetValue() <= fileSize.GetValue())
          {
-            ShowErrorDialog(
-               &window,
+            BasicUI::ShowErrorDialog( *ProjectFramePlacement( &project ),
                XO("Insufficient Disk Space"),
                XO("The project size exceeds the available free space on the target disk.\n\n"
                   "Please select a different disk with more free space."),
@@ -658,8 +659,7 @@ bool ProjectFileManager::SaveCopy(const FilePath &fileName /* = wxT("") */)
       {
          if (fileSize > UINT32_MAX)
          {
-            ShowErrorDialog(
-               &window,
+            BasicUI::ShowErrorDialog( *ProjectFramePlacement( &project ),
                XO("Error Saving Project"),
                XO("The project exceeds the maximum size of 4GB when writing to a FAT32 formatted filesystem."),
                "Error:_Unsuitable_drive"
@@ -772,13 +772,10 @@ bool ProjectFileManager::OpenNewProject()
    bool bOK = OpenProject();
    if( !bOK )
    {
-      ShowErrorDialog(
-         nullptr,
-         XO("Can't open new empty project"),
-         XO("Error opening a new empty project"), 
-         "FAQ:Errors_opening_a_new_empty_project",
-         true, 
-         projectFileIO.GetLastLog());
+       auto tmpdir = wxFileName(TempDirectory::UnsavedProjectFileName()).GetPath();
+
+       UnwritableLocationErrorDialog dlg(nullptr, tmpdir);
+       dlg.ShowModal();
    }
    return bOK;
 }
@@ -864,28 +861,13 @@ bool ProjectFileManager::IsAlreadyOpen(const FilePath &projPathName)
    return false;
 }
 
-// FIXME:? TRAP_ERR This should return a result that is checked.
-//    See comment in AudacityApp::MRUOpen().
-void ProjectFileManager::OpenFile(const FilePath &fileNameArg, bool addtohistory)
+AudacityProject *ProjectFileManager::OpenFile( const ProjectChooserFn &chooser,
+   const FilePath &fileNameArg, bool addtohistory)
 {
-   auto &project = mProject;
-   auto &history = ProjectHistory::Get( project );
-   auto &projectFileIO = ProjectFileIO::Get( project );
-   auto &tracks = TrackList::Get( project );
-   auto &trackPanel = TrackPanel::Get( project );
-   auto &window = ProjectWindow::Get( project );
-
    // On Win32, we may be given a short (DOS-compatible) file name on rare
    // occasions (e.g. stuff like "C:\PROGRA~1\AUDACI~1\PROJEC~1.AUP"). We
    // convert these to long file name first.
    auto fileName = PlatformCompatibility::GetLongFileName(fileNameArg);
-
-   if (TempDirectory::FATFilesystemDenied(fileName,
-                                      XO("Project resides on FAT formatted drive.\n"
-                                         "Copy it to another drive to open it.")))
-   {
-      return;
-   }
 
    // Make sure it isn't already open.
    // Vaughan, 2011-03-25: This was done previously in AudacityProject::OpenFiles()
@@ -895,7 +877,7 @@ void ProjectFileManager::OpenFile(const FilePath &fileNameArg, bool addtohistory
    //    This was reported in http://bugzilla.audacityteam.org/show_bug.cgi?id=137#c17,
    //    but is not really part of that bug. Anyway, prevent it!
    if (IsAlreadyOpen(fileName))
-      return;
+      return nullptr;
 
    // Data loss may occur if users mistakenly try to open ".aup3.bak" files
    // left over from an unsuccessful save or by previous versions of Audacity.
@@ -907,8 +889,8 @@ void ProjectFileManager::OpenFile(const FilePath &fileNameArg, bool addtohistory
 "You are trying to open an automatically created backup file.\nDoing this may result in severe data loss.\n\nPlease open the actual Audacity project file instead."),
          XO("Warning - Backup File Detected"),
          wxOK | wxCENTRE,
-         &window);
-      return;
+         nullptr);
+      return nullptr;
    }
 
    if (!::wxFileExists(fileName)) {
@@ -916,10 +898,11 @@ void ProjectFileManager::OpenFile(const FilePath &fileNameArg, bool addtohistory
          XO("Could not open file: %s").Format( fileName ),
          XO("Error Opening File"),
          wxOK | wxCENTRE,
-         &window);
-      return;
+         nullptr);
+      return nullptr;
    }
 
+   // Following block covers cases other than a project file:
    {
       wxFFile ff(fileName, wxT("rb"));
 
@@ -936,8 +919,8 @@ void ProjectFileManager::OpenFile(const FilePath &fileNameArg, bool addtohistory
             XO("Could not open file: %s").Format( fileName ),
             XO("Error opening file"),
             wxOK | wxCENTRE,
-            &window);
-         return;
+            nullptr);
+         return nullptr;
       }
 
       char buf[7];
@@ -947,40 +930,69 @@ void ProjectFileManager::OpenFile(const FilePath &fileNameArg, bool addtohistory
             XO("File may be invalid or corrupted: \n%s").Format( fileName ),
             XO("Error Opening File or Project"),
             wxOK | wxCENTRE,
-            &window);
-         return;
+            nullptr);
+         return nullptr;
       }
 
       if (wxStrncmp(buf, "SQLite", 6) != 0)
       {
+         // Not a database
 #ifdef EXPERIMENTAL_DRAG_DROP_PLUG_INS
          // Is it a plug-in?
-         if (PluginManager::Get().DropFile(fileName))
-         {
+         if (PluginManager::Get().DropFile(fileName)) {
             MenuCreator::RebuildAllMenuBars();
+            // Plug-in installation happened, not really opening of a file,
+            // so return null
+            return nullptr;
          }
-         else
 #endif
 #ifdef USE_MIDI
-         if (FileNames::IsMidi(fileName))
-         {
-            DoImportMIDI(project, fileName);
+         if (FileNames::IsMidi(fileName)) {
+            auto &project = chooser(false);
+            // If this succeeds, indo history is incremented, and it also does
+            // ZoomAfterImport:
+            if(DoImportMIDI(project, fileName))
+               return &project;
+            return nullptr;
          }
-         else
 #endif
-         {
-            Import(fileName);
+         auto &project = chooser(false);
+         // Undo history is incremented inside this:
+         if (Get(project).Import(fileName)) {
+            // Undo history is incremented inside this:
+            // Bug 2743: Don't zoom with lof.
+            if (!fileName.AfterLast('.').IsSameAs(wxT("lof"), false))
+               ProjectWindow::Get(project).ZoomAfterImport(nullptr);
+            return &project;
          }
-         // Bug 2743: Don't zoom with lof.
-         if (!fileName.AfterLast('.').IsSameAs(wxT("lof"), false))
-            window.ZoomAfterImport(nullptr);
-
-         return;
+         return nullptr;
       }
    }
 
+   // Disallow opening of .aup3 project files from FAT drives, but only such
+   // files, not importable types.  (Bug 2800)
+   if (TempDirectory::FATFilesystemDenied(fileName,
+      XO("Project resides on FAT formatted drive.\n"
+        "Copy it to another drive to open it.")))
+   {
+      return nullptr;
+   }
+
+   auto &project = chooser(true);
+   return Get(project).OpenProjectFile(fileName, addtohistory);
+}
+
+AudacityProject *ProjectFileManager::OpenProjectFile(
+   const FilePath &fileName, bool addtohistory)
+{
+   auto &project = mProject;
+   auto &history = ProjectHistory::Get( project );
+   auto &tracks = TrackList::Get( project );
+   auto &trackPanel = TrackPanel::Get( project );
+   auto &projectFileIO = ProjectFileIO::Get( project );
+   auto &window = ProjectWindow::Get( project );
+
    auto results = ReadProjectFile( fileName );
- 
    const bool bParseSuccess = results.parseSuccess;
    const auto &errorStr = results.errorString;
    const bool err = results.trackError;
@@ -1022,6 +1034,7 @@ void ProjectFileManager::OpenFile(const FilePath &fileNameArg, bool addtohistory
          // PushState calls AutoSave(), so no longer need to do so here.
          history.PushState(XO("Project was recovered"), XO("Recover"));
       }
+      return &project;
    }
    else {
       // Vaughan, 2011-10-30:
@@ -1041,11 +1054,12 @@ void ProjectFileManager::OpenFile(const FilePath &fileNameArg, bool addtohistory
 
       wxLogError(wxT("Could not parse file \"%s\". \nError: %s"), fileName, errorStr.Debug());
 
-      projectFileIO.ShowError(
-         &window,
+      projectFileIO.ShowError( *ProjectFramePlacement(&project),
          XO("Error Opening Project"),
          errorStr,
          results.helpUrl);
+
+      return nullptr;
    }
 }
 
@@ -1219,8 +1233,9 @@ bool ProjectFileManager::Import(
          }
 
          // Additional help via a Help button links to the manual.
-         ShowErrorDialog(&GetProjectFrame( project ),XO("Error Importing"),
-                         errorMessage, wxT("Importing_Audio"));
+         ShowErrorDialog( *ProjectFramePlacement(&project),
+            XO("Error Importing"),
+            errorMessage, wxT("Importing_Audio"));
       }
 
       return false;
@@ -1240,7 +1255,8 @@ bool ProjectFileManager::Import(
 #ifndef EXPERIMENTAL_IMPORT_AUP3
       // Handle AUP3 ("project") files specially
       if (fileName.AfterLast('.').IsSameAs(wxT("aup3"), false)) {
-         ShowErrorDialog(&GetProjectFrame( project ), XO("Error Importing"),
+         BasicUI::ShowErrorDialog( *ProjectFramePlacement(&project),
+            XO("Error Importing"),
             XO( "Cannot import AUP3 format.  Use File > Open instead"),
             wxT("File_Menu"));
          return false;
@@ -1254,8 +1270,8 @@ bool ProjectFileManager::Import(
       if (!errorMessage.empty()) {
          // Error message derived from Importer::Import
          // Additional help via a Help button links to the manual.
-         ShowErrorDialog(&GetProjectFrame( project ), XO("Error Importing"),
-                         errorMessage, wxT("Importing_Audio"));
+         BasicUI::ShowErrorDialog( *ProjectFramePlacement(&project),
+            XO("Error Importing"), errorMessage, wxT("Importing_Audio"));
       }
       if (!success)
          return false;
@@ -1294,7 +1310,7 @@ bool ProjectFileManager::Import(
 
       history.PushState(XO("Imported '%s'").Format( fileName ), XO("Import"));
 
-      return false;
+      return true;
    }
 
    // PRL: Undo history is incremented inside this:
@@ -1346,7 +1362,7 @@ public:
 
    void OnGetURL(wxCommandEvent &WXUNUSED(evt))
    {
-      HelpSystem::ShowHelp(this, wxT("File_Menu:_Compact_Project"), true);
+      HelpSystem::ShowHelp(this, L"File_Menu:_Compact_Project", true);
    }
 };
 }

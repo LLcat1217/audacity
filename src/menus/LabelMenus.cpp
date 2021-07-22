@@ -1,4 +1,4 @@
-#include "../AudioIOBase.h"
+#include "../AudioIO.h"
 #include "../Clipboard.h"
 #include "../CommonCommandFlags.h"
 #include "../LabelTrack.h"
@@ -302,7 +302,7 @@ void OnAddLabelPlaying(const CommandContext &context)
    auto &project = context.project;
    auto token = ProjectAudioIO::Get( project ).GetAudioIOToken();
 
-   auto gAudioIO = AudioIOBase::Get();
+   auto gAudioIO = AudioIO::Get();
    if (token > 0 &&
        gAudioIO->IsStreamActive(token)) {
       double indicator = gAudioIO->GetStreamTime();
@@ -346,7 +346,7 @@ void OnPasteNewLabel(const CommandContext &context)
       // Unselect the last label, so we'll have just one active label when
       // we're done
       if (plt)
-         LabelTrackView::Get( *plt ).SetSelectedIndex( -1 );
+         LabelTrackView::Get( *plt ).ResetTextSelection();
 
       // Add a NEW label, paste into it
       // Paul L:  copy whatever defines the selected region, not just times

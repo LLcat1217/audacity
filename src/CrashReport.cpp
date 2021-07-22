@@ -6,15 +6,12 @@
  
  *//*******************************************************************/
 
-#include "Audacity.h"
-#include "CrashReport.h"
-#include "Experimental.h"
 
-#if defined(EXPERIMENTAL_CRASH_REPORT)
+#include "CrashReport.h"
+
+#if defined(HAS_CRASH_REPORT)
 #include <atomic>
 #include <thread>
-
-#include <wx/progdlg.h>
 
 #if defined(__WXMSW__)
 #include <wx/evtloop.h>
@@ -23,12 +20,14 @@
 #include "wxFileNameWrapper.h"
 #include "AudacityLogger.h"
 #include "AudioIOBase.h"
+#include "BasicUI.h"
 #include "FileNames.h"
 #include "Internat.h"
+#include "Languages.h"
 #include "Project.h"
 #include "ProjectFileIO.h"
 #include "prefs/GUIPrefs.h"
-#include "widgets/ErrorDialog.h"
+#include "widgets/AudacityTextEntryDialog.h"
 
 namespace CrashReport {
 
@@ -44,11 +43,10 @@ void Generate(wxDebugReport::Context ctx)
 
    {
       // Provides a progress dialog with indeterminate mode
-      wxGenericProgressDialog pd(XO("Audacity Support Data").Translation(),
-                                 XO("This may take several seconds").Translation(),
-                                 300000,     // range
-                                 nullptr,    // parent
-                                 wxPD_APP_MODAL | wxPD_ELAPSED_TIME | wxPD_SMOOTH);
+      using namespace BasicUI;
+      auto pd = MakeGenericProgress({},
+         XO("Audacity Support Data"), XO("This may take several seconds"));
+      wxASSERT(pd);
 
       std::atomic_bool done = {false};
       auto thread = std::thread([&]
@@ -60,9 +58,9 @@ void Generate(wxDebugReport::Context ctx)
    
          if (ctx == wxDebugReport::Context_Current)
          {
-            auto saveLang = GUIPrefs::GetLangShort();
-            GUIPrefs::InitLang( wxT("en") );
-            auto cleanup = finally( [&]{ GUIPrefs::InitLang( saveLang ); } );
+            auto saveLang = Languages::GetLangShort();
+            GUIPrefs::SetLang( wxT("en") );
+            auto cleanup = finally( [&]{ GUIPrefs::SetLang( saveLang ); } );
       
             auto gAudioIO = AudioIOBase::Get();
             rpt.AddText(wxT("audiodev.txt"), gAudioIO->GetDeviceInfo(), wxT("Audio Device Info"));
@@ -87,7 +85,7 @@ void Generate(wxDebugReport::Context ctx)
       while (!done)
       {
          wxMilliSleep(50);
-         pd.Pulse();
+         pd->Pulse();
       }
       thread.join();
    }

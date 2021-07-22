@@ -1,5 +1,4 @@
-#include "../Audacity.h"
-#include "../Experimental.h"
+
 
 #include "../AudioIO.h"
 #include "../BatchProcessDialog.h"
@@ -7,6 +6,7 @@
 #include "../CommonCommandFlags.h"
 #include "../Menus.h"
 #include "../PluginManager.h"
+#include "../PluginRegistrationDialog.h"
 #include "../Prefs.h"
 #include "../Project.h"
 #include "../ProjectSettings.h"
@@ -25,6 +25,8 @@
 #include "../prefs/EffectsPrefs.h"
 #include "../prefs/PrefsDialog.h"
 
+#include <wx/log.h>
+
 // private helper classes and functions
 namespace {
 
@@ -37,10 +39,20 @@ AudacityProject::AttachedWindows::RegisteredFactory sMacrosWindowKey{
    }
 };
 
+bool ShowManager(
+   PluginManager &pm, wxWindow *parent, EffectType type)
+{
+   pm.CheckForUpdates();
+
+   PluginRegistrationDialog dlg(parent, type);
+   return dlg.ShowModal() == wxID_OK;
+}
+
 void DoManagePluginsMenu(AudacityProject &project, EffectType type)
 {
    auto &window = GetProjectFrame( project );
-   if (PluginManager::Get().ShowManager(&window, type))
+   auto &pm = PluginManager::Get();
+   if (ShowManager(pm, &window, type))
       MenuCreator::RebuildAllMenuBars();
 }
 
@@ -303,9 +315,8 @@ MenuTable::BaseItemPtrs PopulateEffectsMenu(
    std::vector<const PluginDescriptor*> optplugs;
 
    EffectManager & em = EffectManager::Get();
-   const PluginDescriptor *plug = pm.GetFirstPluginForEffectType(type);
-   while (plug)
-   {
+   for (auto &plugin : pm.EffectsOfType(type)) {
+      auto plug = &plugin;
       if( plug->IsInstantiated() && em.IsHidden(plug->GetID()) )
          continue;
       if ( !plug->IsEnabled() ){
@@ -317,13 +328,12 @@ MenuTable::BaseItemPtrs PopulateEffectsMenu(
          && (plug->GetSymbol() !=
                ComponentInterfaceSymbol("Nyquist Effects Prompt"))
          && (plug->GetSymbol() != ComponentInterfaceSymbol("Nyquist Tools Prompt"))
-         && (plug->GetSymbol() != ComponentInterfaceSymbol("Nyquist Prompt"))
+         && (plug->GetSymbol() != ComponentInterfaceSymbol(NYQUIST_PROMPT_ID))
 #endif
          )
          defplugs.push_back(plug);
       else
          optplugs.push_back(plug);
-      plug = pm.GetNextPluginForEffectType(type);
    }
 
    wxString groupby = EffectsGroupBy.Read();
@@ -385,7 +395,7 @@ void OnResetConfig(const CommandContext &context)
    menuManager.mLastAnalyzer = "";
    menuManager.mLastTool = "";
 
-   gPrefs->DeleteAll();
+   ResetPreferences();
 
    // Directory will be reset on next restart.
    FileNames::UpdateDefaultPath(FileNames::Operation::Temp, TempDirectory::DefaultTempDir());

@@ -18,7 +18,7 @@
 #ifndef __AUDACITY_WIDGETS_PROGRESSDIALOG__
 #define __AUDACITY_WIDGETS_PROGRESSDIALOG__
 
-#include "../Audacity.h"
+
 
 #include <vector>
 #include <wx/defs.h>
@@ -26,16 +26,11 @@
 
 #include "wxPanelWrapper.h" // to inherit
 
+#include "BasicUI.h" // For ProgressResult
+using ProgressResult = BasicUI::ProgressResult;
+
 class wxGauge;
 class wxStaticText;
-
-enum class ProgressResult : unsigned
-{
-   Cancelled = 0, //<! User says that whatever is happening is undesirable and shouldn't have happened at all
-   Success,       //<! User says nothing, everything works fine, continue doing whatever we're doing
-   Failed,        //<! Something has gone wrong, we should stop and cancel everything we did
-   Stopped        //<! Nothing is wrong, but user says we should stop now and leave things as they are now
-};
 
 enum ProgressDialogFlags
 {

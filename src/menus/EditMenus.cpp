@@ -1,4 +1,4 @@
-#include "../Audacity.h" // for USE_* macros
+
 #include "../AdornedRulerPanel.h"
 #include "../Clipboard.h"
 #include "../CommonCommandFlags.h"
@@ -46,7 +46,7 @@ bool DoPasteText(AudacityProject &project)
    for (auto pLabelTrack : tracks.Any<LabelTrack>())
    {
       // Does this track have an active label?
-      if (LabelTrackView::Get( *pLabelTrack ).HasSelection( project )) {
+      if (LabelTrackView::Get( *pLabelTrack ).GetTextEditIndex(project) != -1) {
 
          // Yes, so try pasting into it
          auto &view = LabelTrackView::Get( *pLabelTrack );
@@ -447,6 +447,7 @@ void OnPaste(const CommandContext &context)
             // Throw, so that any previous changes to the project in this loop
             // are discarded.
             throw SimpleMessageBoxException{
+               ExceptionType::BadUserAction,
                XO("Pasting one type of track into another is not allowed."),
                XO("Warning"), 
                "Error:_Copying_or_Pasting"
@@ -477,6 +478,7 @@ void OnPaste(const CommandContext &context)
                // Throw, so that any previous changes to the project in this
                // loop are discarded.
                throw SimpleMessageBoxException{
+                  ExceptionType::BadUserAction,
                   XO("Copying stereo audio into a mono track is not allowed."),
                   XO("Warning"), 
                   "Error:_Copying_or_Pasting"

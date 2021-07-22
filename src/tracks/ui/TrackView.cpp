@@ -97,6 +97,10 @@ bool TrackView::HandleXMLAttribute( const wxChar *attr, const wxChar *value )
    long nValue;
    if (!wxStrcmp(attr, wxT("height")) &&
          XMLValueChecker::IsGoodInt(strValue) && strValue.ToLong(&nValue)) {
+      // Bug 2803: Extreme values for track height (caused by integer overflow)
+      // will stall Audacity as it tries to create an enormous vertical ruler.
+      // So clamp to reasonable values.
+      nValue = std::max( 40l, std::min( nValue, 1000l ));
       SetHeight(nValue);
       return true;
    }
@@ -137,6 +141,13 @@ std::shared_ptr<const TrackVRulerControls> TrackView::GetVRulerControls() const
    return const_cast< TrackView* >( this )->GetVRulerControls();
 }
 
+std::shared_ptr<CommonTrackCell> TrackView::GetAffordanceControls()
+{
+   if (!mpAffordanceCellControl)
+      mpAffordanceCellControl = DoGetAffordanceControls();
+   return mpAffordanceCellControl;
+}
+
 void TrackView::DoSetY(int y)
 {
    mY = y;
@@ -159,6 +170,11 @@ void TrackView::SetHeight(int h)
 void TrackView::DoSetHeight(int h)
 {
    mHeight = h;
+}
+
+std::shared_ptr<CommonTrackCell> TrackView::DoGetAffordanceControls()
+{
+   return {};
 }
 
 namespace {

@@ -8,15 +8,15 @@
 
 **********************************************************************/
 
-#include "../../Audacity.h" // for USE_* macros
+
 
 #if defined(USE_VAMP)
 
 #include <memory>
 
-#include "audacity/ModuleInterface.h"
-#include "audacity/EffectInterface.h"
-#include "audacity/PluginInterface.h"
+#include "ModuleInterface.h"
+#include "EffectInterface.h"
+#include "PluginInterface.h"
 
 #include <vamp-hostsdk/PluginLoader.h>
 
@@ -29,7 +29,7 @@
 class VampEffectsModule final : public ModuleInterface
 {
 public:
-   VampEffectsModule(const wxString *path);
+   VampEffectsModule();
    virtual ~VampEffectsModule();
 
    // ComponentInterface implementation
@@ -58,8 +58,8 @@ public:
 
    bool IsPluginValid(const PluginPath & path, bool bFast) override;
 
-   ComponentInterface *CreateInstance(const PluginPath & path) override;
-   void DeleteInstance(ComponentInterface *instance) override;
+   std::unique_ptr<ComponentInterface>
+      CreateInstance(const PluginPath & path) override;
 
 private:
    // VampEffectModule implementation
@@ -67,9 +67,6 @@ private:
    std::unique_ptr<Vamp::Plugin> FindPlugin(const PluginPath & wpath,
                             int & output,
                             bool & hasParameters);
-
-private:
-   PluginPath mPath;
 };
 
 #endif

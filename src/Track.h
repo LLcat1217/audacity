@@ -12,13 +12,14 @@
 #ifndef __AUDACITY_TRACK__
 #define __AUDACITY_TRACK__
 
-#include "Audacity.h" // for USE_* macros
 
-#include "Experimental.h"
+
+
 
 #include <vector>
 #include <list>
 #include <functional>
+#include <wx/event.h> // to inherit wxCommandEvent
 #include <wx/longlong.h>
 
 #include "ClientData.h"
@@ -182,7 +183,7 @@ private:
 };
 
 //! Optional extra information about an interval, appropriate to a subtype of Track
-struct TrackIntervalData {
+struct AUDACITY_DLL_API TrackIntervalData {
    virtual ~TrackIntervalData();
 };
 
@@ -1255,7 +1256,7 @@ wxDECLARE_EXPORTED_EVENT(AUDACITY_DLL_API,
 /*! @brief A flat linked list of tracks supporting Add,  Remove,
  * Clear, and Contains, serialization of the list of tracks, event notifications
  */
-class TrackList final
+class AUDACITY_DLL_API TrackList final
    : public wxEvtHandler
    , public ListOfTracks
    , public std::enable_shared_from_this<TrackList>

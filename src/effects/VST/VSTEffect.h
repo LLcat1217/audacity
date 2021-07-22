@@ -8,13 +8,13 @@
 
 **********************************************************************/
 
-#include "../../Audacity.h" // for USE_* macros
+
 
 #if USE_VST
 
-#include "audacity/EffectInterface.h"
-#include "audacity/ModuleInterface.h"
-#include "audacity/PluginInterface.h"
+#include "EffectInterface.h"
+#include "ModuleInterface.h"
+#include "PluginInterface.h"
 
 #include "../../SampleFormat.h"
 #include "../../xml/XMLTagHandler.h"
@@ -403,7 +403,7 @@ private:
 class VSTEffectsModule final : public ModuleInterface
 {
 public:
-   VSTEffectsModule(const wxString *path);
+   VSTEffectsModule();
    virtual ~VSTEffectsModule();
 
    // ComponentInterface implementation
@@ -432,15 +432,12 @@ public:
 
    bool IsPluginValid(const PluginPath & path, bool bFast) override;
 
-   ComponentInterface *CreateInstance(const PluginPath & path) override;
-   void DeleteInstance(ComponentInterface *instance) override;
+   std::unique_ptr<ComponentInterface>
+      CreateInstance(const PluginPath & path) override;
 
    // VSTEffectModule implementation
 
    static void Check(const wxChar *path);
-
-private:
-   PluginPath mPath;
 };
 
 #endif // USE_VST

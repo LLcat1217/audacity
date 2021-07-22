@@ -20,12 +20,12 @@ used throughout Audacity into this one place.
 
 *//********************************************************************/
 
-#include "Audacity.h"
+
 #include "FileNames.h"
 
-#include "Experimental.h"
 
-#include "MemoryX.h"
+
+#include <memory>
 
 #include <wx/app.h>
 #include <wx/defs.h>
@@ -343,7 +343,7 @@ FilePath FileNames::BaseDir()
    baseDir = PlatformCompatibility::GetExecutablePath();
 #else
    // Linux goes into /*prefix*/share/audacity/
-   baseDir = FileNames::LowerCaseAppNameInPath(wxStandardPaths::Get().GetDataDir());
+   baseDir = FileNames::LowerCaseAppNameInPath(wxStandardPaths::Get().GetPluginsDir());
 #endif
 
    return baseDir.GetPath();
@@ -715,6 +715,22 @@ char *FileNames::VerifyFilename(const wxString &s, bool input)
    return (char *) (const char *) mFilename;
 }
 #endif
+
+bool FileNames::WritableLocationCheck(const FilePath& path)
+{
+    bool status = wxFileName::IsDirWritable(path);
+
+    if (!status)
+    {
+        AudacityMessageBox(
+            XO("Directory %s does not have write permissions")
+            .Format(path),
+            XO("Error"),
+            wxOK | wxICON_ERROR);
+    }
+
+    return status;
+}
 
 // Using this with wxStringArray::Sort will give you a list that
 // is alphabetical, without depending on case.  If you use the

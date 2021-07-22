@@ -8,10 +8,8 @@ Paul Licameli split from WaveTrackView.cpp
 
 **********************************************************************/
 
-#include "../../../../Audacity.h"
-#include "SpectrumView.h"
 
-#include "../../../../Experimental.h"
+#include "SpectrumView.h"
 
 #include "SpectrumVRulerControls.h"
 #include "WaveTrackView.h"
@@ -174,7 +172,8 @@ ChooseColorSet( float bin0, float bin1, float selBinLo,
 void DrawClipSpectrum(TrackPanelDrawingContext &context,
                                    WaveTrackCache &waveTrackCache,
                                    const WaveClip *clip,
-                                   const wxRect & rect)
+                                   const wxRect & rect,
+                                   bool selected)
 {
    auto &dc = context.dc;
    const auto artist = TrackArtist::Get( context );
@@ -217,7 +216,7 @@ void DrawClipSpectrum(TrackPanelDrawingContext &context,
    freqHi = selectedRegion.f1();
 #endif
 
-   const bool &isGrayscale = settings.isGrayscale;
+   const int &colorScheme = settings.colorScheme;
    const int &range = settings.range;
    const int &gain = settings.gain;
 
@@ -578,7 +577,7 @@ void DrawClipSpectrum(TrackPanelDrawingContext &context,
             : clip->mSpecPxCache->values[correctedX * hiddenMid.height + yy];
 
          unsigned char rv, gv, bv;
-         GetColorGradient(value, selected, isGrayscale, &rv, &gv, &bv);
+         GetColorGradient(value, selected, colorScheme, &rv, &gv, &bv);
 
 #ifdef EXPERIMENTAL_FFT_Y_GRID
          if (fftYGrid && yGrid[yy]) {
@@ -610,13 +609,19 @@ void DrawClipSpectrum(TrackPanelDrawingContext &context,
 
    // Draw clip edges, as also in waveform view, which improves the appearance
    // of split views
-   params.DrawClipEdges( dc, rect );
+   {
+      //increase virtual view size by px to hide edges that should not be visible
+      auto clipRect = ClipParameters::GetClipRect(*clip, zoomInfo, rect.Inflate(1, 0), 1);
+      if (!clipRect.IsEmpty())
+         TrackArt::DrawClipEdges(dc, clipRect, selected);
+   }
 }
 
 }
 
-void SpectrumView::DoDraw( TrackPanelDrawingContext &context,
-                                const WaveTrack *track,
+void SpectrumView::DoDraw(TrackPanelDrawingContext& context,
+                                const WaveTrack* track,
+                                const WaveClip* selectedClip,
                                 const wxRect & rect )
 {
    const auto artist = TrackArtist::Get( context );
@@ -627,7 +632,7 @@ void SpectrumView::DoDraw( TrackPanelDrawingContext &context,
 
    WaveTrackCache cache(track->SharedPointer<const WaveTrack>());
    for (const auto &clip: track->GetClips())
-      DrawClipSpectrum( context, cache, clip.get(), rect );
+      DrawClipSpectrum( context, cache, clip.get(), rect, clip.get() == selectedClip );
 
    DrawBoldBoundaries( context, track, rect );
 }
@@ -655,14 +660,18 @@ void SpectrumView::Draw(
       wxAntialiasMode aamode = dc.GetGraphicsContext()->GetAntialiasMode();
       dc.GetGraphicsContext()->SetAntialiasMode(wxANTIALIAS_NONE);
 #endif
+
+      auto waveTrackView = GetWaveTrackView().lock();
+      wxASSERT(waveTrackView.use_count());
       
-      DoDraw( context, wt.get(), rect );
+      auto seletedClip = waveTrackView->GetSelectedClip().lock();
+      DoDraw( context, wt.get(), seletedClip.get(), rect );
       
 #if defined(__WXMAC__)
       dc.GetGraphicsContext()->SetAntialiasMode(aamode);
 #endif
    }
-   CommonTrackView::Draw( context, rect, iPass );
+   WaveTrackSubView::Draw( context, rect, iPass );
 }
 
 static const WaveTrackSubViews::RegisteredFactory key{

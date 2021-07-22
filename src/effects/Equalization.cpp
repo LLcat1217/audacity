@@ -52,11 +52,9 @@
 *//*******************************************************************/
 
 
-#include "../Audacity.h"
+
 #include "Equalization.h"
 #include "LoadEffects.h"
-
-#include "../Experimental.h"
 
 #include <math.h>
 #include <vector>
@@ -71,6 +69,7 @@
 #include <wx/dcmemory.h>
 #include <wx/event.h>
 #include <wx/listctrl.h>
+#include <wx/log.h>
 #include <wx/image.h>
 #include <wx/intl.h>
 #include <wx/choice.h>
@@ -95,7 +94,6 @@
 #include "../FileNames.h"
 #include "../Envelope.h"
 #include "../EnvelopeEditor.h"
-#include "../widgets/ErrorDialog.h"
 #include "../FFT.h"
 #include "../Prefs.h"
 #include "../Project.h"
@@ -105,6 +103,7 @@
 #include "../ViewInfo.h"
 #include "../WaveTrack.h"
 #include "../widgets/Ruler.h"
+#include "../widgets/AudacityTextEntryDialog.h"
 #include "../xml/XMLFileReader.h"
 #include "../AllThemeResources.h"
 #include "../float_cast.h"
@@ -350,14 +349,14 @@ TranslatableString EffectEqualization::GetDescription()
    return XO("Adjusts the volume levels of particular frequencies");
 }
 
-wxString EffectEqualization::ManualPage()
+ManualPageID EffectEqualization::ManualPage()
 {
    // Bug 2509: Must use _ and not space in names.
    if( mOptions == kEqOptionGraphic )
-      return wxT("Graphic_EQ");
+      return L"Graphic_EQ";
    if( mOptions == kEqOptionCurve )
-      return wxT("Filter_Curve_EQ");
-   return wxT("Equalization");
+      return L"Filter_Curve_EQ";
+   return L"Equalization";
 }
 
 // EffectDefinitionInterface implementation
@@ -1165,7 +1164,14 @@ void EffectEqualization::PopulateOrExchange(ShuttleGui & S)
    else{
       mPanel->Show( true );
       szrV->Show(szr1, true);
-      mUIParent->SetMinSize(mUIParent->GetBestSize());
+      // This sizing calculation is hacky.
+      // Rather than set the true minimum size we set a size we would 
+      // like to have.
+      // This makes the default size of the dialog good, but has the 
+      // downside that the user can't adjust the dialog smaller.
+      wxSize sz = szrV->GetMinSize();
+      sz += wxSize( 400, 100);
+      szrV->SetMinSize(sz);
    }
    ForceRecalc();
 
@@ -1325,7 +1331,7 @@ bool EffectEqualization::ProcessOne(int count, WaveTrack * t,
    {
       auto block = limitSampleBufferSize( idealBlockLen, len );
 
-      t->Get((samplePtr)buffer.get(), floatSample, s, block);
+      t->GetFloats(buffer.get(), s, block);
 
       for(size_t i = 0; i < block; i += L)   //go through block in lumps of length L
       {
@@ -1825,7 +1831,8 @@ bool EffectEqualization::GetDefaultFileName(wxFileName &fileName)
       // LLL:  Is there really a need for an error message at all???
       //auto errorMessage = XO("EQCurves.xml and EQDefaultCurves.xml were not found on your system.\nPlease press 'help' to visit the download page.\n\nSave the curves at %s")
       //   .Format( FileNames::DataDir() );
-      //ShowErrorDialog(mUIParent, XO("EQCurves.xml and EQDefaultCurves.xml missing"),
+      //BasicUI::ShowErrorDialog( wxWidgetsWindowPlacement{ mUIParent },
+      //   XO("EQCurves.xml and EQDefaultCurves.xml missing"),
       //   errorMessage, wxT("http://wiki.audacityteam.org/wiki/EQCurvesDownload"), false);
 
       // Have another go at finding EQCurves.xml in the data dir, in case 'help' helped

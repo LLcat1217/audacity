@@ -11,14 +11,15 @@
 
 #include "LyricsWindow.h"
 #include "Lyrics.h"
-#include "AudioIOBase.h"
+#include "AudioIO.h"
 #include "CommonCommandFlags.h"
-#include "Prefs.h" // for RTL_WORKAROUND
+#include "prefs/GUISettings.h" // for RTL_WORKAROUND
 #include "Project.h"
 #include "ProjectAudioIO.h"
 #include "ProjectFileIO.h"
 #include "ViewInfo.h"
 
+#include <wx/app.h>
 #include <wx/radiobut.h>
 #include <wx/toolbar.h>
 #include <wx/settings.h>
@@ -49,7 +50,7 @@ END_EVENT_TABLE()
 const wxSize gSize = wxSize(LYRICS_DEFAULT_WIDTH, LYRICS_DEFAULT_HEIGHT);
 
 LyricsWindow::LyricsWindow(AudacityProject *parent)
-   : wxFrame( &GetProjectFrame( *parent ), -1, {},
+   : wxFrame( &GetProjectFrame( *parent ), -1, wxString{},
             wxPoint(100, 300), gSize,
             //v Bug in wxFRAME_FLOAT_ON_PARENT:
             // If both the project frame and LyricsWindow are minimized and you restore LyricsWindow,
@@ -160,7 +161,7 @@ void LyricsWindow::OnTimer(wxCommandEvent &event)
 {
    if (ProjectAudioIO::Get( *mProject ).IsAudioActive())
    {
-      auto gAudioIO = AudioIOBase::Get();
+      auto gAudioIO = AudioIO::Get();
       GetLyricsPanel()->Update(gAudioIO->GetStreamTime());
    }
    else

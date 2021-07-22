@@ -30,7 +30,7 @@
 
 *//*******************************************************************/
 
-#include "Audacity.h"
+
 #include "Tags.h"
 
 // For compilers that support precompilation, includes "wx/wx.h".
@@ -40,6 +40,7 @@
 
 #ifndef WX_PRECOMP
 // Include your minimal set of headers here, or wx.h
+#include <wx/log.h>
 #include <wx/window.h>
 #endif
 
@@ -972,7 +973,7 @@ void TagsEditorDialog::OnDontShow( wxCommandEvent & Evt )
 
 void TagsEditorDialog::OnHelp(wxCommandEvent& WXUNUSED(event))
 {
-   HelpSystem::ShowHelp(this, wxT("Metadata_Editor"), true);
+   HelpSystem::ShowHelp(this, L"Metadata_Editor", true);
 }
 
 bool TagsEditorDialog::TransferDataFromWindow()

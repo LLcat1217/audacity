@@ -8,13 +8,11 @@
  
  **********************************************************************/
 
-#include "../Audacity.h"
+
 #include "RealtimeEffectManager.h"
 
-#include "../Experimental.h"
-
-#include "audacity/EffectInterface.h"
-#include "MemoryX.h"
+#include "EffectInterface.h"
+#include <memory>
 
 #include <atomic>
 #include <wx/time.h>

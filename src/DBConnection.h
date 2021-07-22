@@ -21,6 +21,7 @@ Paul Licameli -- split from ProjectFileIO.h
 #include <thread>
 
 #include "ClientData.h"
+#include "Identifier.h"
 
 struct sqlite3;
 struct sqlite3_stmt;
@@ -131,7 +132,7 @@ private:
     Commit() must not be called again after one successful call.
     An exception is thrown from the constructor if the transaction cannot open.
  */
-class TransactionScope
+class AUDACITY_DLL_API TransactionScope
 {
 public:
    TransactionScope(DBConnection &connection, const char *name);

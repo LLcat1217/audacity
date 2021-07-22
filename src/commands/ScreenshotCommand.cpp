@@ -17,13 +17,14 @@ small calculations of rectangles.
 
 *//*******************************************************************/
 
-#include "../Audacity.h"
+
 #include "ScreenshotCommand.h"
 
 #include <mutex>
 
 #include "LoadCommands.h"
 #include "../Project.h"
+#include <wx/app.h>
 #include <wx/toplevel.h>
 #include <wx/dcscreen.h>
 #include <wx/dcmemory.h>

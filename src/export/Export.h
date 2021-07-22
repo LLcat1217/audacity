@@ -14,7 +14,7 @@
 #include <functional>
 #include <vector>
 #include <wx/filename.h> // member variable
-#include "audacity/Types.h"
+#include "Identifier.h"
 #include "../SampleFormat.h"
 #include "../widgets/wxPanelWrapper.h" // to inherit
 #include "../FileNames.h" // for FileTypes
@@ -36,7 +36,7 @@ class ProgressDialog;
 class ShuttleGui;
 class Mixer;
 using WaveTrackConstArray = std::vector < std::shared_ptr < const WaveTrack > >;
-enum class ProgressResult : unsigned;
+namespace BasicUI{ enum class ProgressResult : unsigned; }
 class wxFileNameWrapper;
 
 class AUDACITY_DLL_API FormatInfo
@@ -64,6 +64,7 @@ class AUDACITY_DLL_API FormatInfo
 class AUDACITY_DLL_API ExportPlugin /* not final */
 {
 public:
+   using ProgressResult = BasicUI::ProgressResult;
 
    ExportPlugin();
    virtual ~ExportPlugin();
@@ -158,7 +159,8 @@ using ExportPluginArray = std::vector < std::unique_ptr< ExportPlugin > > ;
 //----------------------------------------------------------------------------
 
 // For a file suffix change from the options.
-wxDECLARE_EVENT(AUDACITY_FILE_SUFFIX_EVENT, wxCommandEvent);
+wxDECLARE_EXPORTED_EVENT(AUDACITY_DLL_API,
+   AUDACITY_FILE_SUFFIX_EVENT, wxCommandEvent);
 
 class  AUDACITY_DLL_API Exporter final : public wxEvtHandler
 {
@@ -172,7 +174,7 @@ public:
    // Register factories, not plugin objects themselves, which allows them
    // to have some fresh state variables each time export begins again
    // and to compute translated strings for the current locale
-   struct RegisteredExportPlugin{
+   struct AUDACITY_DLL_API RegisteredExportPlugin{
       RegisteredExportPlugin(
          const Identifier &id, // an internal string naming the plug-in
          const ExportPluginFactory&,
@@ -322,16 +324,17 @@ private:
    DECLARE_EVENT_TABLE()
 };
 
-TranslatableString AudacityExportCaptionStr();
-TranslatableString AudacityExportMessageStr();
+AUDACITY_DLL_API TranslatableString AudacityExportCaptionStr();
+AUDACITY_DLL_API TranslatableString AudacityExportMessageStr();
 
 /// We have many Export errors that are essentially anonymous
 /// and are distinguished only by an error code number.
 /// Rather than repeat the code, we have it just once.
-void ShowExportErrorDialog(wxString ErrorCode,
+AUDACITY_DLL_API void ShowExportErrorDialog(wxString ErrorCode,
    TranslatableString message = AudacityExportMessageStr(),
    const TranslatableString& caption = AudacityExportCaptionStr());
 
+AUDACITY_DLL_API
 void ShowDiskFullExportErrorDialog(const wxFileNameWrapper &fileName);
 
 #endif

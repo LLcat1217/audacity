@@ -12,13 +12,14 @@ Paul Licameli split from AudacityProject.cpp
 
 #include <atomic>
 #include <sqlite3.h>
+#include <wx/app.h>
 #include <wx/crt.h>
 #include <wx/frame.h>
-#include <wx/progdlg.h>
 #include <wx/sstream.h>
 #include <wx/xml/xml.h>
 
 #include "ActiveProjects.h"
+#include "CodeConversions.h"
 #include "DBConnection.h"
 #include "Project.h"
 #include "ProjectFileIORegistry.h"
@@ -30,11 +31,16 @@ Paul Licameli split from AudacityProject.cpp
 #include "ViewInfo.h"
 #include "WaveTrack.h"
 #include "widgets/AudacityMessageBox.h"
-#include "widgets/ErrorDialog.h"
 #include "widgets/NumericTextCtrl.h"
+#include "BasicUI.h"
 #include "widgets/ProgressDialog.h"
 #include "wxFileNameWrapper.h"
 #include "xml/XMLFileReader.h"
+#include "SentryHelper.h"
+
+// Don't change this unless the file format changes
+// in an irrevocable way
+#define AUDACITY_FILE_FORMAT_VERSION "1.3.0"
 
 #undef NO_SHM
 #if !defined(__WXMSW__)
@@ -303,6 +309,7 @@ DBConnection &ProjectFileIO::GetConnection()
       {
          throw SimpleMessageBoxException
          {
+            ExceptionType::Internal,
             XO("Failed to open the project's database"),
             XO("Warning"),
             "Error:_Disk_full_or_not_writable"
@@ -506,6 +513,9 @@ int ProjectFileIO::Exec(const char *query, const ExecCB &callback)
 
    if (rc != SQLITE_ABORT && errmsg)
    {
+      ADD_EXCEPTION_CONTEXT("sqlite3.query", query);
+      ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+
       SetDBError(
          XO("Failed to execute a project file command:\n\n%s").Format(query),
          Verbatim(errmsg),
@@ -566,6 +576,10 @@ bool ProjectFileIO::GetBlob(const char *sql, wxMemoryBuffer &buffer)
    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
    if (rc != SQLITE_OK)
    {
+      ADD_EXCEPTION_CONTEXT("sqlite3.query", sql);
+      ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+      ADD_EXCEPTION_CONTEXT("sqlite3.context", "ProjectGileIO::GetBlob::prepare");
+
       SetDBError(
          XO("Unable to prepare project file command:\n\n%s").Format(sql)
       );
@@ -582,6 +596,10 @@ bool ProjectFileIO::GetBlob(const char *sql, wxMemoryBuffer &buffer)
 
    if (rc != SQLITE_ROW)
    {
+      ADD_EXCEPTION_CONTEXT("sqlite3.query", sql);
+      ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+      ADD_EXCEPTION_CONTEXT("sqlite3.context", "ProjectGileIO::GetBlob::step");
+
       SetDBError(
          XO("Failed to retrieve data from the project file.\nThe following command failed:\n\n%s").Format(sql)
       );
@@ -724,6 +742,9 @@ bool ProjectFileIO::DeleteBlocks(const BlockIDs &blockids, bool complement)
    rc = sqlite3_create_function(db, "inset", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC, const_cast<void*>(p), InSet, nullptr, nullptr);
    if (rc != SQLITE_OK)
    {
+      ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+      ADD_EXCEPTION_CONTEXT("sqlite3.context", "ProjectGileIO::DeleteBlocks::create_function");
+
       /* i18n-hint: An error message.  Don't translate inset or blockids.*/
       SetDBError(XO("Unable to add 'inset' function (can't verify blockids)"));
       return false;
@@ -738,6 +759,10 @@ bool ProjectFileIO::DeleteBlocks(const BlockIDs &blockids, bool complement)
    rc = sqlite3_exec(db, sql, nullptr, nullptr, nullptr);
    if (rc != SQLITE_OK)
    {
+      ADD_EXCEPTION_CONTEXT("sqlite3.query", sql.ToStdString());
+      ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+      ADD_EXCEPTION_CONTEXT("sqlite3.context", "ProjectGileIO::GetBlob");
+
       if( rc==SQLITE_READONLY)
          /* i18n-hint: An error message.  Don't translate blockfiles.*/
          SetDBError(XO("Project is read only\n(Unable to work with the blockfiles)"));
@@ -847,6 +872,10 @@ bool ProjectFileIO::CopyTo(const FilePath &destpath,
          // Only capture the error if there wasn't a previous error
          if (result != SQLITE_OK && (rc == SQLITE_DONE || rc == SQLITE_OK))
          {
+            ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+            ADD_EXCEPTION_CONTEXT(
+               "sqlite3.context", "ProjectGileIO::CopyTo.cleanup");
+
             SetDBError(
                XO("Failed to rollback transaction during import")
             );
@@ -864,7 +893,10 @@ bool ProjectFileIO::CopyTo(const FilePath &destpath,
 
    // Attach the destination database 
    wxString sql;
-   sql.Printf("ATTACH DATABASE '%s' AS outbound;", destpath.ToUTF8());
+   wxString dbName = destpath;
+   // Bug 2793: Quotes in name need escaping for sqlite3.
+   dbName.Replace( "'", "''");
+   sql.Printf("ATTACH DATABASE '%s' AS outbound;", dbName.ToUTF8());
 
    rc = sqlite3_exec(db, sql, nullptr, nullptr, nullptr);
    if (rc != SQLITE_OK)
@@ -879,7 +911,7 @@ bool ProjectFileIO::CopyTo(const FilePath &destpath,
    //
    // NOTE:  Between the above attach and setting the mode here, a normal DELETE
    //        mode journal will be used and will briefly appear in the filesystem.
-   if (!pConn->FastMode("outbound"))
+   if ( pConn->FastMode("outbound") != SQLITE_OK)
    {
       SetDBError(
          XO("Unable to switch to fast journaling mode")
@@ -917,6 +949,10 @@ bool ProjectFileIO::CopyTo(const FilePath &destpath,
                               nullptr);
       if (rc != SQLITE_OK)
       {
+         ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+         ADD_EXCEPTION_CONTEXT(
+            "sqlite3.context", "ProjectGileIO::CopyTo.prepare");
+
          SetDBError(
             XO("Unable to prepare project file command:\n\n%s").Format(sql)
          );
@@ -947,6 +983,10 @@ bool ProjectFileIO::CopyTo(const FilePath &destpath,
          rc = sqlite3_bind_int64(stmt, 1, blockid);
          if (rc != SQLITE_OK)
          {
+            ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+            ADD_EXCEPTION_CONTEXT(
+               "sqlite3.context", "ProjectGileIO::CopyTo.bind");
+
             SetDBError(
                XO("Failed to bind SQL parameter")
             );
@@ -958,6 +998,10 @@ bool ProjectFileIO::CopyTo(const FilePath &destpath,
          rc = sqlite3_step(stmt);
          if (rc != SQLITE_DONE)
          {
+            ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+            ADD_EXCEPTION_CONTEXT(
+               "sqlite3.context", "ProjectGileIO::CopyTo.step");
+
             SetDBError(
                XO("Failed to update the project file.\nThe following command failed:\n\n%s").Format(sql)
             );
@@ -967,6 +1011,10 @@ bool ProjectFileIO::CopyTo(const FilePath &destpath,
          // Reset statement to beginning
          if (sqlite3_reset(stmt) != SQLITE_OK)
          {
+            ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+            ADD_EXCEPTION_CONTEXT(
+               "sqlite3.context", "ProjectGileIO::CopyTo.reset");
+
             THROW_INCONSISTENCY_EXCEPTION;
          }
 
@@ -997,6 +1045,9 @@ bool ProjectFileIO::CopyTo(const FilePath &destpath,
    rc = sqlite3_exec(db, "DETACH DATABASE outbound;", nullptr, nullptr, nullptr);
    if (rc != SQLITE_OK)
    {
+      ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+      ADD_EXCEPTION_CONTEXT("sqlite3.context", "ProjectGileIO::CopyTo::detach");
+
       SetDBError(
          XO("Destination project could not be detached")
       );
@@ -1090,7 +1141,7 @@ FilePath ProjectFileIO::SafetyFileName(const FilePath &src)
 
    int nn = 1;
    auto numberString = [](int num) -> wxString {
-      return num == 1 ? "" : wxString::Format(".%d", num);
+      return num == 1 ? wxString{} : wxString::Format(".%d", num);
    };
 
    auto suffixes = AuxiliaryFileSuffixes();
@@ -1120,27 +1171,23 @@ bool ProjectFileIO::RenameOrWarn(const FilePath &src, const FilePath &dst)
       done = true;
    });
 
-   auto &window = GetProjectFrame( mProject );
-
    // Provides a progress dialog with indeterminate mode
-   wxGenericProgressDialog pd(XO("Copying Project").Translation(),
-                              XO("This may take several seconds").Translation(),
-                              300000,     // range
-                              &window,     // parent
-                              wxPD_APP_MODAL | wxPD_ELAPSED_TIME | wxPD_SMOOTH);
+   using namespace BasicUI;
+   auto pd = MakeGenericProgress(*ProjectFramePlacement(&mProject),
+      XO("Copying Project"), XO("This may take several seconds"));
+   wxASSERT(pd);
 
    // Wait for the checkpoints to end
    while (!done)
    {
       wxMilliSleep(50);
-      pd.Pulse();
+      pd->Pulse();
    }
    thread.join();
 
    if (!success)
    {
-      ShowError(
-         &window,
+      ShowError( *ProjectFramePlacement(&mProject),
          XO("Error Writing to File"),
          XO("Audacity failed to write file %s.\n"
             "Perhaps disk is full or not writable.\n"
@@ -1473,7 +1520,6 @@ void ProjectFileIO::SetFileName(const FilePath &fileName)
 bool ProjectFileIO::HandleXMLTag(const wxChar *tag, const wxChar **attrs)
 {
    auto &project = mProject;
-   auto &window = GetProjectFrame(project);
    auto &viewInfo = ViewInfo::Get(project);
    auto &settings = ProjectSettings::Get(project);
 
@@ -1585,8 +1631,7 @@ bool ProjectFileIO::HandleXMLTag(const wxChar *tag, const wxChar **attrs)
       auto msg = XO("This file was saved using Audacity %s.\nYou are using Audacity %s. You may need to upgrade to a newer version to open this file.")
          .Format(audacityVersion, AUDACITY_VERSION_STRING);
 
-      ShowError(
-         &window,
+      ShowError( *ProjectFramePlacement(&project),
          XO("Can't open project file"),
          msg, 
          "FAQ:Errors_opening_an_Audacity_project"
@@ -1721,6 +1766,9 @@ bool ProjectFileIO::AutoSaveDelete(sqlite3 *db /* = nullptr */)
    rc = sqlite3_exec(db, "DELETE FROM autosave;", nullptr, nullptr, nullptr);
    if (rc != SQLITE_OK)
    {
+      ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+      ADD_EXCEPTION_CONTEXT("sqlite3.context", "ProjectGileIO::AutoSaveDelete");
+
       SetDBError(
          XO("Failed to remove the autosave information from the project file.")
       );
@@ -1761,6 +1809,10 @@ bool ProjectFileIO::WriteDoc(const char *table,
    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
    if (rc != SQLITE_OK)
    {
+      ADD_EXCEPTION_CONTEXT("sqlite3.query", sql);
+      ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+      ADD_EXCEPTION_CONTEXT("sqlite3.context", "ProjectGileIO::WriteDoc::prepare");
+
       SetDBError(
          XO("Unable to prepare project file command:\n\n%s").Format(sql)
       );
@@ -1776,6 +1828,10 @@ bool ProjectFileIO::WriteDoc(const char *table,
    if (sqlite3_bind_blob(stmt, 1, dict.GetData(), dict.GetDataLen(), SQLITE_STATIC) ||
        sqlite3_bind_blob(stmt, 2, data.GetData(), data.GetDataLen(), SQLITE_STATIC))
    {
+      ADD_EXCEPTION_CONTEXT("sqlite3.query", sql);
+      ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+      ADD_EXCEPTION_CONTEXT("sqlite3.context", "ProjectGileIO::WriteDoc::bind");
+
       SetDBError(
          XO("Unable to bind to blob")
       );
@@ -1785,6 +1841,10 @@ bool ProjectFileIO::WriteDoc(const char *table,
    rc = sqlite3_step(stmt);
    if (rc != SQLITE_DONE)
    {
+      ADD_EXCEPTION_CONTEXT("sqlite3.query", sql);
+      ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+      ADD_EXCEPTION_CONTEXT("sqlite3.context", "ProjectGileIO::WriteDoc::step");
+
       SetDBError(
          XO("Failed to update the project file.\nThe following command failed:\n\n%s").Format(sql)
       );
@@ -1976,7 +2036,7 @@ bool ProjectFileIO::SaveProject(
 
          if (!reopened) {
             wxTheApp->CallAfter([this]{
-               ShowError(nullptr,
+               ShowError( {},
                   XO("Warning"),
                   XO(
 "The project's database failed to reopen, "
@@ -2000,8 +2060,7 @@ bool ProjectFileIO::SaveProject(
       // after we switch to the new file.
       if (!CopyTo(fileName, XO("Saving project"), false))
       {
-         ShowError(
-            nullptr,
+         ShowError( {},
             XO("Error Saving Project"),
             FileException::WriteFailureMessage(fileName),
             "Error:_Disk_full_or_not_writable"
@@ -2040,24 +2099,23 @@ bool ProjectFileIO::SaveProject(
          });
 
          // Provides a progress dialog with indeterminate mode
-         wxGenericProgressDialog pd(XO("Syncing").Translation(),
-                                    XO("This may take several seconds").Translation(),
-                                    300000,     // range
-                                    nullptr,    // parent
-                                    wxPD_APP_MODAL | wxPD_ELAPSED_TIME | wxPD_SMOOTH);
+         using namespace BasicUI;
+         auto pd = MakeGenericProgress({},
+            XO("Syncing"), XO("This may take several seconds"));
+         wxASSERT(pd);
 
          // Wait for the checkpoints to end
          while (!done)
          {
             wxMilliSleep(50);
-            pd.Pulse();
+            pd->Pulse();
          }
          thread.join();
 
          if (!success)
          {
             // Additional help via a Help button links to the manual.
-            ShowError(nullptr,
+            ShowError( {},
                       XO("Error Saving Project"),
                       XO("The project failed to open, possibly due to limited space\n"
                          "on the storage device.\n\n%s").Format(GetLastError()),
@@ -2079,7 +2137,7 @@ bool ProjectFileIO::SaveProject(
       if (!AutoSaveDelete())
       {
          // Additional help via a Help button links to the manual.
-         ShowError(nullptr,
+         ShowError( {},
                    XO("Error Saving Project"),
                    XO("Unable to remove autosave information, possibly due to limited space\n"
                       "on the storage device.\n\n%s").Format(GetLastError()),
@@ -2122,8 +2180,7 @@ bool ProjectFileIO::SaveProject(
    else
    {
       if ( !UpdateSaved( nullptr ) ) {
-         ShowError(
-            nullptr,
+         ShowError( {},
             XO("Error Saving Project"),
             FileException::WriteFailureMessage(fileName),
             "Error:_Disk_full_or_not_writable"
@@ -2246,12 +2303,16 @@ wxLongLong ProjectFileIO::GetFreeDiskSpace() const
 }
 
 /// Displays an error dialog with a button that offers help
-void ProjectFileIO::ShowError(wxWindow *parent,
+void ProjectFileIO::ShowError(const BasicUI::WindowPlacement &placement,
                               const TranslatableString &dlogTitle,
                               const TranslatableString &message,
                               const wxString &helpPage)
 {
-   ShowErrorDialog(parent, dlogTitle, message, helpPage, true, GetLastLog());
+   using namespace audacity;
+   using namespace BasicUI;
+   ShowErrorDialog( placement, dlogTitle, message, helpPage,
+      ErrorDialogOptions{ ErrorDialogType::ModalErrorReport }
+         .Log(ToWString(GetLastLog())));
 }
 
 const TranslatableString &ProjectFileIO::GetLastError() const
@@ -2385,6 +2446,9 @@ int64_t ProjectFileIO::GetDiskUsage(DBConnection &conn, SampleBlockID blockid /*
                     "SELECT rootpage FROM sqlite_master WHERE tbl_name = 'sampleblocks';");
    if (stmt == nullptr || sqlite3_step(stmt) != SQLITE_ROW)
    {
+      ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(sqlite3_errcode(conn.DB())));
+      ADD_EXCEPTION_CONTEXT("sqlite3.context", "ProjectGileIO::GetDiskUsage");
+
       return 0;
    }
 

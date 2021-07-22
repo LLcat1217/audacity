@@ -15,7 +15,7 @@
 
 *//*******************************************************************/
 
-#include "../Audacity.h"
+
 #include "DirectoriesPrefs.h"
 
 #include <math.h>
@@ -38,6 +38,7 @@
 #include "../widgets/AudacityMessageBox.h"
 #include "../widgets/ReadOnlyText.h"
 #include "../widgets/wxTextCtrlWrapper.h"
+#include "../FileNames.h"
 
 using namespace FileNames;
 using namespace TempDirectory;
@@ -163,7 +164,7 @@ TranslatableString DirectoriesPrefs::GetDescription()
    return XO("Preferences for Directories");
 }
 
-wxString DirectoriesPrefs::HelpPageName()
+ManualPageID DirectoriesPrefs::HelpPageName()
 {
    return "Directories_Preferences";
 }
@@ -295,6 +296,11 @@ void DirectoriesPrefs::OnTempBrowse(wxCommandEvent &evt)
          return;
       }
 
+      if (!FileNames::WritableLocationCheck(dlog.GetPath()))
+      {
+         return;
+      }
+
       // Append an "audacity_temp" directory to this path if necessary (the
       // default, the existing pref (as stored in the control), and any path
       // ending in a directory with the same name as what we'd add should be OK
@@ -371,6 +377,11 @@ void DirectoriesPrefs::OnBrowse(wxCommandEvent &evt)
       }
    }
 
+   if (!FileNames::WritableLocationCheck(dlog.GetPath()))
+   {
+      return;
+   }
+
    tc->SetValue(dlog.GetPath());
 }
 
@@ -407,6 +418,10 @@ bool DirectoriesPrefs::Validate()
    }
    else {
       /* If the directory already exists, make sure it is writable */
+      if (!FileNames::WritableLocationCheck(mTempText->GetValue()))
+      {
+          return false;
+      }
       wxLogNull logNo;
       Temp.AppendDir(wxT("canicreate"));
       path =  Temp.GetPath();
@@ -430,6 +445,19 @@ bool DirectoriesPrefs::Validate()
 "Changes to temporary directory will not take effect until Audacity is restarted"),
          XO("Temp Directory Update"),
          wxOK | wxCENTRE | wxICON_INFORMATION);
+   }
+
+   const wxString macroPathString = mMacrosText->GetValue();
+
+   if (!macroPathString.empty())
+   {
+      const wxFileName macroPath { macroPathString };
+
+      if (macroPath.DirExists())
+      {
+         if (!FileNames::WritableLocationCheck(macroPathString))
+            return false;
+      }
    }
 
    return true;

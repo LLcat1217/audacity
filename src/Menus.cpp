@@ -25,10 +25,10 @@
 
 *//*******************************************************************/
 
-#include "Audacity.h" // for USE_* macros
+
 #include "Menus.h"
 
-#include "Experimental.h"
+
 
 #include <wx/frame.h>
 
@@ -39,7 +39,7 @@
 #include "commands/CommandManager.h"
 #include "toolbars/ToolManager.h"
 #include "widgets/AudacityMessageBox.h"
-#include "widgets/ErrorDialog.h"
+#include "BasicUI.h"
 
 #include <unordered_set>
 
@@ -805,8 +805,7 @@ void MenuManager::TellUserWhyDisallowed(
       return;
 
    // Does not have the warning icon...
-   ShowErrorDialog(
-      NULL,
+   BasicUI::ShowErrorDialog( {},
       untranslatedTitle,
       reason,
       helpPage);

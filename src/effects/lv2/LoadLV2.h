@@ -12,7 +12,7 @@
 #ifndef LV2EFFECTSMODULE_H
 #define LV2EFFECTSMODULE_H
 
-#include "../../MemoryX.h"
+#include <memory>
 
 #include "lilv/lilv.h"
 
@@ -31,9 +31,9 @@
 #include "lv2/uri-map/uri-map.h"
 #include "lv2/units/units.h"
 
-#include "audacity/ModuleInterface.h"
-#include "audacity/EffectInterface.h"
-#include "audacity/PluginInterface.h"
+#include "ModuleInterface.h"
+#include "EffectInterface.h"
+#include "PluginInterface.h"
 
 #include "lv2_external_ui.h"
 
@@ -163,7 +163,7 @@
 class LV2EffectsModule final : public ModuleInterface
 {
 public:
-   LV2EffectsModule(const wxString *path);
+   LV2EffectsModule();
    virtual ~LV2EffectsModule();
 
    // ComponentInterface implementation
@@ -192,16 +192,13 @@ public:
 
    bool IsPluginValid(const PluginPath & path, bool bFast) override;
 
-   ComponentInterface *CreateInstance(const PluginPath & path) override;
-   void DeleteInstance(ComponentInterface *instance) override;
+   std::unique_ptr<ComponentInterface>
+      CreateInstance(const PluginPath & path) override;
 
    // LV2EffectModule implementation
 
 private:
    const LilvPlugin *GetPlugin(const PluginPath & path);
-
-private:
-   PluginPath mPath;
 };
 
 extern LilvWorld *gWorld;

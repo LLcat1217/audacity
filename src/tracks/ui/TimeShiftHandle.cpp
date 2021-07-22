@@ -8,10 +8,8 @@ Paul Licameli split from TrackPanel.cpp
 
 **********************************************************************/
 
-#include "../../Audacity.h" // for USE_* macros
-#include "TimeShiftHandle.h"
 
-#include "../../Experimental.h"
+#include "TimeShiftHandle.h"
 
 #include "TrackView.h"
 #include "../../AColor.h"
@@ -34,6 +32,21 @@ TimeShiftHandle::TimeShiftHandle
    : mGripHit{ gripHit }
 {
    mClipMoveState.mCapturedTrack = pTrack;
+}
+
+std::shared_ptr<Track> TimeShiftHandle::GetTrack() const
+{
+   return mClipMoveState.mCapturedTrack;
+}
+
+bool TimeShiftHandle::WasMoved() const
+{
+    return mDidSlideVertically || (mClipMoveState.initialized && mClipMoveState.wasMoved);
+}
+
+bool TimeShiftHandle::Clicked() const
+{
+   return mClipMoveState.initialized;
 }
 
 void TimeShiftHandle::Enter(bool, AudacityProject *)
@@ -112,6 +125,8 @@ void ClipMoveState::DoHorizontalOffset( double offset )
          channel->Offset( offset );
    }
 }
+
+TrackShifter::TrackShifter() = default;
 
 TrackShifter::~TrackShifter() = default;
 
@@ -275,6 +290,8 @@ void ClipMoveState::Init(
 {
    shifters.clear();
 
+   initialized = true;
+
    auto &state = *this;
    state.mCapturedTrack = capturedTrack.SharedPointer();
 
@@ -426,6 +443,9 @@ double ClipMoveState::DoSlideHorizontal( double desiredSlideAmount )
    // finally, here is where clips are moved
    if ( desiredSlideAmount != 0.0 )
       state.DoHorizontalOffset( desiredSlideAmount );
+
+   //attempt to move a clip is counted to
+   wasMoved = true;
 
    return (state.hSlideAmount = desiredSlideAmount);
 }
@@ -601,6 +621,10 @@ namespace {
       TrackList &trackList, Track &capturedTrack, Track &track,
       ClipMoveState &state)
    {
+      if (state.shifters.empty())
+         // Shift + Dragging hasn't yet supported vertical movement
+         return false;
+
       // Accumulate new pairs for the correspondence, and merge them
       // into the given correspondence only on success
       Correspondence newPairs;
@@ -699,7 +723,7 @@ namespace {
    [[noreturn]] void MigrationFailure() {
       // Tracks may be in an inconsistent state; throw to the application
       // handler which restores consistency from undo history
-      throw SimpleMessageBoxException{
+      throw SimpleMessageBoxException{ ExceptionType::Internal,
          XO("Could not shift between tracks")};
    }
 

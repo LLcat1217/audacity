@@ -8,15 +8,15 @@ Paul Licameli split from ProjectManager.cpp
 
 **********************************************************************/
 
-#include "Audacity.h"
+
 #include "ProjectAudioManager.h"
 
-#include "Experimental.h"
-
+#include <wx/app.h>
 #include <wx/frame.h>
 #include <wx/statusbr.h>
 
 #include "AudioIO.h"
+#include "BasicUI.h"
 #include "CommonCommandFlags.h"
 #include "LabelTrack.h"
 #include "Menus.h"
@@ -35,7 +35,6 @@ Paul Licameli split from ProjectManager.cpp
 #include "prefs/TracksPrefs.h"
 #include "tracks/ui/Scrubbing.h"
 #include "tracks/ui/TrackView.h"
-#include "widgets/ErrorDialog.h"
 #include "widgets/MeterPanelBase.h"
 #include "widgets/Warning.h"
 #include "widgets/AudacityMessageBox.h"
@@ -263,10 +262,13 @@ int ProjectAudioManager::PlayPlayRegion(const SelectedRegion &selectedRegion,
          // handler!  Easy fix, just delay the user alert instead.
          auto &window = GetProjectFrame( mProject );
          window.CallAfter( [&]{
-         // Show error message if stream could not be opened
-         ShowErrorDialog(&window, XO("Error"),
-                         XO("Error opening sound device.\nTry changing the audio host, playback device and the project sample rate."),
-                         wxT("Error_opening_sound_device"));
+            using namespace BasicUI;
+            // Show error message if stream could not be opened
+            ShowErrorDialog( *ProjectFramePlacement(&mProject),
+               XO("Error"),
+               XO("Error opening sound device.\nTry changing the audio host, playback device and the project sample rate."),
+               wxT("Error_opening_sound_device"),
+               ErrorDialogOptions{ ErrorDialogType::ModalErrorReport } );
          });
       }
    }
@@ -389,8 +391,7 @@ WaveTrackArray ProjectAudioManager::ChooseExistingRecordingTracks(
    AudacityProject &proj, bool selectedOnly, double targetRate)
 {
    auto p = &proj;
-   size_t recordingChannels =
-      std::max(0L, gPrefs->Read(wxT("/AudioIO/RecordChannels"), 2));
+   size_t recordingChannels = std::max(0, AudioIORecordChannels.Read());
    bool strictRules = (recordingChannels <= 2);
 
    // Iterate over all wave tracks, or over selected wave tracks only.
@@ -521,9 +522,10 @@ void ProjectAudioManager::OnRecord(bool altAppearance)
             }
 
             existingTracks = ChooseExistingRecordingTracks(*p, false, options.rate);
-            t0 = std::max( t0, trackRange.max( &Track::GetEndTime ) );
+            if(!existingTracks.empty())
+                t0 = std::max( t0, trackRange.max( &Track::GetEndTime ) );
             // If suitable tracks still not found, will record into NEW ones,
-            // but the choice of t0 does not depend on that.
+            // starting with t0
          }
          
          // Whether we decided on NEW tracks or not:
@@ -642,14 +644,7 @@ bool ProjectAudioManager::DoRecord(AudacityProject &project,
             // Less than or equal, not just less than, to ensure a clip boundary.
             // when append recording.
             if (endTime <= t0) {
-
-               // Pad the recording track with silence, up to the
-               // maximum time.
-               auto newTrack = pending->EmptyCopy();
-               newTrack->InsertSilence(0.0, t0 - endTime);
-               newTrack->Flush();
-               pending->Clear(endTime, t0);
-               pending->Paste(endTime, newTrack.get());
+               pending->CreateClip(t0);
             }
             transportTracks.captureTracks.push_back(pending);
          }
@@ -665,7 +660,7 @@ bool ProjectAudioManager::DoRecord(AudacityProject &project,
          auto &trackList = TrackList::Get( *p );
          auto numTracks = trackList.Leaders< const WaveTrack >().size();
 
-         auto recordingChannels = std::max(1L, gPrefs->Read(wxT("/AudioIO/RecordChannels"), 2));
+         auto recordingChannels = std::max(1, AudioIORecordChannels.Read());
 
          gPrefs->Read(wxT("/GUI/TrackNames/RecordingNameCustom"), &recordingNameCustom, false);
          gPrefs->Read(wxT("/GUI/TrackNames/TrackNumber"), &useTrackNumber, false);
@@ -758,8 +753,10 @@ bool ProjectAudioManager::DoRecord(AudacityProject &project,
          // Show error message if stream could not be opened
          auto msg = XO("Error opening recording device.\nError code: %s")
             .Format( gAudioIO->LastPaErrorString() );
-         ShowErrorDialog(&GetProjectFrame( mProject ),
-            XO("Error"), msg, wxT("Error_opening_sound_device"));
+         using namespace BasicUI;
+         ShowErrorDialog( *ProjectFramePlacement(&mProject),
+            XO("Error"), msg, wxT("Error_opening_sound_device"),
+            ErrorDialogOptions{ ErrorDialogType::ModalErrorReport } );
       }
    }
 
@@ -1075,7 +1072,7 @@ bool ProjectAudioManager::DoPlayStopSelect( bool click, bool shift )
    auto token = ProjectAudioIO::Get( project ).GetAudioIOToken();
    auto &viewInfo = ViewInfo::Get( project );
    auto &selection = viewInfo.selectedRegion;
-   auto gAudioIO = AudioIOBase::Get();
+   auto gAudioIO = AudioIO::Get();
 
    //If busy, stop playing, make sure everything is unpaused.
    if (scrubber.HasMark() ||

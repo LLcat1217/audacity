@@ -8,7 +8,7 @@ Paul Licameli split from TrackPanel.cpp
 
 **********************************************************************/
 
-#include "../../../Audacity.h"
+
 #include "LabelDefaultClickHandle.h"
 
 #include "LabelTrackView.h"
@@ -72,7 +72,6 @@ UIHandle::Result LabelDefaultClickHandle::Click
          if (pLT != &TrackView::Get( *lt )) {
             auto &view = LabelTrackView::Get( *lt );
             view.ResetFlags();
-            view.SetSelectedIndex( -1 );
          }
       }
    }

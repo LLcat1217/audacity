@@ -11,10 +11,8 @@
 
 **********************************************************************/
 
-#include "../Audacity.h"
-#include "EffectUI.h"
 
-#include "../Experimental.h"
+#include "EffectUI.h"
 
 #include "Effect.h"
 #include "EffectManager.h"
@@ -652,6 +650,7 @@ private:
 #include "../AudioIO.h"
 #include "../CommonCommandFlags.h"
 #include "../Menus.h"
+#include "../prefs/GUISettings.h" // for RTL_WORKAROUND
 #include "../Project.h"
 #include "../ProjectAudioManager.h"
 #include "../ShuttleGui.h"
@@ -661,6 +660,7 @@ private:
 #include "../widgets/AudacityMessageBox.h"
 #include "../widgets/HelpSystem.h"
 
+#include <wx/app.h>
 #include <wx/bmpbuttn.h>
 #include <wx/checkbox.h>
 #include <wx/dcclient.h>
@@ -1983,7 +1983,7 @@ wxDialog *EffectUI::DialogFactory( wxWindow &parent, EffectHostInterface *pHost,
             menuManager.mLastTool = ID;
             menuManager.mLastToolRegistration = MenuCreator::repeattypeplugin;
             menuManager.mRepeatToolFlags = EffectManager::kConfigured;
-            if (shortDesc == XO("Nyquist Prompt")) {
+            if (shortDesc == NYQUIST_PROMPT_NAME) {
                menuManager.mRepeatToolFlags = EffectManager::kRepeatNyquistPrompt;  //Nyquist Prompt is not configured
             }
             break;

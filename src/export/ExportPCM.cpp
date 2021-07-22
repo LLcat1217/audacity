@@ -8,10 +8,11 @@
 
 **********************************************************************/
 
-#include "../Audacity.h" // for USE_* macros
+
 
 #include <wx/defs.h>
 
+#include <wx/app.h>
 #include <wx/choice.h>
 #include <wx/dynlib.h>
 #include <wx/filename.h>
@@ -31,8 +32,8 @@
 #include "../Tags.h"
 #include "../Track.h"
 #include "../widgets/AudacityMessageBox.h"
-#include "../widgets/ErrorDialog.h"
 #include "../widgets/ProgressDialog.h"
+#include "../widgets/wxWidgetsBasicUI.h"
 #include "../wxFileNameWrapper.h"
 
 #include "Export.h"
@@ -442,13 +443,15 @@ void ExportPCM::ReportTooBigError(wxWindow * pParent)
       XO("You have attempted to Export a WAV or AIFF file which would be greater than 4GB.\n"
       "Audacity cannot do this, the Export was abandoned.");
 
-   ShowErrorDialog(pParent, XO("Error Exporting"), message,
-                  wxT("Size_limits_for_WAV_and_AIFF_files"));
+   BasicUI::ShowErrorDialog( wxWidgetsWindowPlacement{ pParent },
+      XO("Error Exporting"), message,
+      wxT("Size_limits_for_WAV_and_AIFF_files"));
 
 // This alternative error dialog was to cover the possibility we could not 
 // compute the size in advance.
 #if 0
-   ShowErrorDialog(pParent, XO("Error Exporting"),
+   BasicUI::ShowErrorDialog( wxWidgetsWindowPlacement{ pParent },
+                  XO("Error Exporting"),
                   XO("Your exported WAV file has been truncated as Audacity cannot export WAV\n"
                     "files bigger than 4GB."),
                   wxT("Size_limits_for_WAV_files"));
@@ -643,12 +646,13 @@ ProgressResult ExportPCM::Export(AudacityProject *project,
                   CopySamples(
                      mixed + (c * SAMPLE_SIZE(format)), format,
                      dither.data() + (c * SAMPLE_SIZE(int24Sample)), int24Sample,
-                     numSamples, true, info.channels, info.channels
+                     numSamples, gHighQualityDither, info.channels, info.channels
                   );
-                  CopySamplesNoDither(
+                  // Copy back without dither
+                  CopySamples(
                      dither.data() + (c * SAMPLE_SIZE(int24Sample)), int24Sample,
                      mixed + (c * SAMPLE_SIZE(format)), format,
-                     numSamples, info.channels, info.channels);
+                     numSamples, DitherType::none, info.channels, info.channels);
                }
             }
 

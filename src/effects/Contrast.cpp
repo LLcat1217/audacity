@@ -9,7 +9,7 @@
 
 *//*******************************************************************/
 
-#include "../Audacity.h"
+
 #include "Contrast.h"
 
 #include "../CommonCommandFlags.h"
@@ -25,7 +25,6 @@
 #include "../widgets/HelpSystem.h"
 #include "../widgets/NumericTextCtrl.h"
 #include "../widgets/AudacityMessageBox.h"
-#include "../widgets/ErrorDialog.h"
 
 #include <cmath>
 #include <limits>
@@ -40,6 +39,7 @@
 #include <wx/log.h>
 #include <wx/wfstream.h>
 #include <wx/txtstrm.h>
+#include <wx/textctrl.h>
 
 #include "../PlatformCompatibility.h"
 
@@ -361,7 +361,7 @@ void ContrastDialog::OnGetURL(wxCommandEvent & WXUNUSED(event))
 {
    // Original help page is back on-line (March 2016), but the manual should be more reliable.
    // http://www.eramp.com/WCAG_2_audio_contrast_tool_help.htm
-   HelpSystem::ShowHelp(this, wxT("Contrast"));
+   HelpSystem::ShowHelp(this, L"Contrast");
 }
 
 void ContrastDialog::OnClose(wxCommandEvent & WXUNUSED(event))
